@@ -2,12 +2,9 @@ const { spawn } = require("child_process");
 const axios = require("axios");
 const logger = require("./utils/log");
 
-///////////////////////////////////////////////////////////
-//========= Create website for dashboard/uptime =========//
-///////////////////////////////////////////////////////////
-
 const express = require('express');
 const path = require('path');
+const { Client, GatewayIntentBits } = require('discord.js'); // Discord client
 
 const app = express();
 const port = process.env.PORT || 8080;
@@ -17,7 +14,7 @@ app.get('/', function (req, res) {
     res.sendFile(path.join(__dirname, '/index.html'));
 });
 
-// Start the server and add error handling
+// Start the server
 app.listen(port, () => {
     logger(`Server is running on port ${port}...`, "[ Starting ]");
 }).on('error', (err) => {
@@ -29,13 +26,12 @@ app.listen(port, () => {
 });
 
 /////////////////////////////////////////////////////////
-//========= Create start bot and make it loop =========//
+//========= Spawn Bot (restart loop) =========//
 /////////////////////////////////////////////////////////
 
-// Initialize global restart counter
 global.countRestart = global.countRestart || 0;
 
-function startBot(message) {
+function spawnBot(message) {
     if (message) logger(message, "[ Starting ]");
 
     const child = spawn("node", ["--trace-warnings", "--async-stack-traces", "Priyansh.js"], {
@@ -48,7 +44,7 @@ function startBot(message) {
         if (codeExit !== 0 && global.countRestart < 5) {
             global.countRestart += 1;
             logger(`Bot exited with code ${codeExit}. Restarting... (${global.countRestart}/5)`, "[ Restarting ]");
-            startBot();
+            spawnBot();
         } else {
             logger(`Bot stopped after ${global.countRestart} restarts.`, "[ Stopped ]");
         }
@@ -57,10 +53,10 @@ function startBot(message) {
     child.on("error", (error) => {
         logger(`An error occurred: ${JSON.stringify(error)}`, "[ Error ]");
     });
-};
+}
 
 ////////////////////////////////////////////////
-//========= Check update from Github =========//
+//========= GitHub Update Check =========//
 ////////////////////////////////////////////////
 
 axios.get("https://raw.githubusercontent.com/priyanshu192/bot/main/package.json")
@@ -73,15 +69,14 @@ axios.get("https://raw.githubusercontent.com/priyanshu192/bot/main/package.json"
         logger(`Failed to fetch update info: ${err.message}`, "[ Update Error ]");
     });
 
-// Start the bot
-startBot();
-// ----- Existing code ऊपर रहेगा -----
+////////////////////////////////////////////////
+//========= Timed Bot Functions =========//
+////////////////////////////////////////////////
 
 let botActive = false;
 let activeTimer;
 
-// Start bot function
-function startBot(name, durationSec) {
+function startTimedBot(name, durationSec) {
     if(botActive) {
         console.log("Bot पहले से चल रहा है!");
         return;
@@ -91,42 +86,53 @@ function startBot(name, durationSec) {
     console.log(`Bot ${name} के नाम से चालू हुआ! Duration: ${durationSec} सेकंड`);
 
     activeTimer = setTimeout(() => {
-        stopBot();
-    }, durationSec * 1000); // Duration सेकंड में
-
-    // अगर bot को हर interval पर कुछ करना है
-    // let interval = setInterval(() => { /* कोई recurring task */ }, 5000);
+        stopTimedBot();
+    }, durationSec * 1000);
 }
 
-// Stop bot function
-function stopBot() {
+function stopTimedBot() {
     if(!botActive) return;
     botActive = false;
     clearTimeout(activeTimer);
     console.log("Bot बंद हो गया!");
 }
 
-// ----- Existing message listener / commands में add करें -----
-client.on('message', async (message) => {
+////////////////////////////////////////////////
+//========= Discord Client & Commands =========//
+////////////////////////////////////////////////
+
+const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
+
+// Replace YOUR_BOT_TOKEN with your actual bot token
+client.login("YOUR_BOT_TOKEN");
+
+client.on('ready', () => {
+    console.log(`Logged in as ${client.user.tag}!`);
+});
+
+client.on('messageCreate', async (message) => {
     if(message.author.bot) return;
 
     let msg = message.content.toLowerCase();
 
-    // Start command
+    // Start timed bot
     if(msg.startsWith('!start')) {
-        // Example: !start Dawood 30
         let args = msg.split(' ');
         let botName = args[1] || "Bot";
-        let duration = parseInt(args[2]) || 60; // default 60 sec
-        startBot(botName, duration);
+        let duration = parseInt(args[2]) || 60;
+        startTimedBot(botName, duration);
         message.reply(`Bot ${botName} चालू हो गया, Duration: ${duration} सेकंड`);
     }
 
-    // Stop command
+    // Stop timed bot
     if(msg.startsWith('!stop')) {
-        stopBot();
+        stopTimedBot();
         message.reply("Bot बंद हो गया!");
     }
 
-    // ----- Existing commands नीचे add रहेंगे -----
+    // Spawn bot manually
+    if(msg.startsWith('!spawn')) {
+        spawnBot("Discord command से bot spawn किया गया");
+        message.reply("Bot spawn हो गया!");
+    }
 });
